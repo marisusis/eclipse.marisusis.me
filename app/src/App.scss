@@ -1,0 +1,15 @@
+/* The following line can be included in a src/App.scss */
+@import "~bootstrap/scss/bootstrap";
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap");
+
+body {
+    background: black;
+    color: white;
+    font-family: "Space Mono", monospace;
+
+    .panels {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: wrap;
+    }
+}

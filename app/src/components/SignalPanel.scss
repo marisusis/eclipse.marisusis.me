@@ -1,0 +1,132 @@
+@keyframes blink_red {
+    0%,
+    100% {
+        color: darkred;
+    }
+
+    /* Start and end with dark red */
+    50% {
+        color: red;
+    }
+
+    /* Midway, change to bright red */
+}
+
+@keyframes blink_yellow {
+    0%,
+    100% {
+        color: #b88100;
+    }
+
+    /* Start and end with dark red */
+    50% {
+        color: #ffb100;
+    }
+
+    /* Midway, change to bright red */
+}
+
+@keyframes blink {
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+
+    /* Start and end with dark red */
+    50% {
+        opacity: 1;
+    }
+
+    /* Midway, change to bright red */
+}
+
+.signal-panel {
+    user-select: none;
+    padding: 10px;
+    width: 540px;
+
+    .signal-info {
+        width: 500px;
+        padding-left: 20px;
+
+        > * {
+            margin: 4px;
+            padding: 0;
+        }
+
+        .signal-panel-title {
+            height: 20px;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            p {
+                font-size: 24px;
+                /* font-weight: bold; */
+                margin: 0;
+            }
+
+            p.online {
+                color: #00b300;
+                /* display: none; */
+            }
+
+            p.offline {
+                color: #fc0e0e;
+                animation: blink 1.5s step-start infinite;
+            }
+
+            p.no-fix {
+                color: #fcee0e;
+                animation: blink 0.5s step-start infinite;
+            }
+        }
+
+        p {
+            font-size: 12px;
+        }
+    }
+}
+
+/* 1179×2556 pixels at 460ppi */
+@media screen and (max-width: 1000px) {
+    .signal-panel {
+        width: 340px;
+
+        .signal-info {
+            width: 320px;
+
+            .signal-panel-title {
+                p {
+                    font-size: 20px;
+                }
+            }
+
+            p {
+                font-size: 10px;
+            }
+        }
+
+        .signal-graph {
+            width: 320px;
+            height: 236px;
+
+            .signal-axis {
+                font-size: 10px;
+            }
+
+            .signal-canvas {
+                border: solid 1px #fff;
+            }
+
+            .signal-error {
+                left: 10px;
+
+                p {
+                    font-size: 50px;
+                }
+            }
+        }
+    }
+}
