@@ -2,6 +2,20 @@
 @import "~bootstrap/scss/bootstrap";
 @import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 
+@keyframes blink2 {
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    /* Start and end with dark red */
+    50% {
+        opacity: 1;
+    }
+
+    /* Midway, change to bright red */
+}
+
 body {
     background: black;
     color: white;
@@ -11,5 +25,9 @@ body {
         display: flex;
         justify-content: space-around;
         flex-wrap: wrap;
+    }
+
+    #waiting {
+        animation: blink2 1.5s ease-in-out infinite;
     }
 }

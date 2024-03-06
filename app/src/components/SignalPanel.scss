@@ -44,10 +44,12 @@
     user-select: none;
     padding: 10px;
     width: 540px;
+    margin-left: -10px;
 
     .signal-info {
         width: 500px;
         padding-left: 20px;
+        padding-right: 4px;
 
         > * {
             margin: 4px;
@@ -62,24 +64,33 @@
             align-items: center;
 
             p {
-                font-size: 24px;
+                /* font-size: 24px; */
+                border: solid 2px #fff;
+                border-radius: 5px;
                 /* font-weight: bold; */
                 margin: 0;
+                padding: 0 5px;
+
+                font-size: 14px;
+                font-weight: bold;
             }
 
             p.online {
-                color: #00b300;
+                color: #0f0;
+                border-color: #0f0;
                 /* display: none; */
             }
 
             p.offline {
                 color: #fc0e0e;
-                animation: blink 1.5s step-start infinite;
+                border-color: #fc0e0e;
+                animation: blink 1.6s step-start infinite;
             }
 
             p.no-fix {
-                color: #fcee0e;
-                animation: blink 0.5s step-start infinite;
+                color: #ffc145;
+                border-color: #ffc145;
+                animation: blink 0.6s step-start infinite;
             }
         }
 
@@ -98,9 +109,9 @@
             width: 320px;
 
             .signal-panel-title {
-                p {
+                /* p {
                     font-size: 20px;
-                }
+                } */
             }
 
             p {

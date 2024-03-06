@@ -1,0 +1,79 @@
+[[nodes]]
+node_id = "ET1001"
+data_endpoint = "http://et1001:8003/last_data"
+location = "St. Louis, MO"
+
+[[nodes]]
+node_id = "ET1002"
+data_endpoint = "http://et1002:8003/last_data"
+location = "Terre Haute, IN"
+
+[[nodes]]
+node_id = "ET1003"
+data_endpoint = "http://et1003:8003/last_data"
+location = "Little Rock, AR"
+
+[[nodes]]
+node_id = "ET1004"
+data_endpoint = "http://et1004:8003/last_data"
+location = "Toronto, ON"
+
+[[nodes]]
+node_id = "ET1005"
+data_endpoint = "http://et1005:8003/last_data"
+location = "Cleveland, OH"
+
+[[nodes]]
+node_id = "ET1006"
+data_endpoint = "http://et1006:8003/last_data"
+location = "Little Rock, AR"
+
+[[nodes]]
+node_id = "ET1007"
+data_endpoint = "http://et1007:8003/last_data"
+location = "Toronto, ON"
+
+[[nodes]]
+node_id = "ET1008"
+data_endpoint = "http://et1008:8003/last_data"
+location = "Toronto, ON"
+
+[[nodes]]
+node_id = "ET1009"
+data_endpoint = "http://et1009:8003/last_data"
+location = "Little Rock, AR"
+
+[[nodes]]
+node_id = "ET1010"
+data_endpoint = "http://et1010:8003/last_data"
+location = "Terre Haute, IN"
+
+[[nodes]]
+node_id = "ET1011"
+data_endpoint = "http://et1011:8003/last_data"
+location = "Austin, TX"
+
+[[nodes]]
+node_id = "ET1012"
+data_endpoint = "http://et1012:8003/last_data"
+location = "Terre Haute, IN"
+
+[[nodes]]
+node_id = "ET1013"
+data_endpoint = "http://et1013:8003/last_data"
+location = "Austin, TX"
+
+[[nodes]]
+node_id = "ET1014"
+data_endpoint = "http://et1014:8003/last_data"
+location = "St. Louis, MO"
+
+[[nodes]]
+node_id = "ET1015"
+data_endpoint = "http://et1015:8003/last_data"
+location = "St. Louis, MO"
+
+[[nodes]]
+node_id = "ET1016"
+data_endpoint = "http://et1016:8003/last_data"
+location = "Austin, TX"

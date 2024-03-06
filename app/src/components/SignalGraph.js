@@ -33,10 +33,6 @@ function SignalGraph({ endpoint, start_time, end_time, data }) {
   useEffect(() => {
     let canvas = canvasRef.current;
     let ctx = canvas.getContext("2d", { alpha: false });
-    let mx = 0;
-    let my = 0;
-    let ticking = false;
-
     let w = canvasSize.width;
     let h = canvasSize.height;
 
@@ -45,18 +41,6 @@ function SignalGraph({ endpoint, start_time, end_time, data }) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (data) {
-        // Debug line
-        // ctx.beginPath();
-        // ctx.moveTo(0, 0);
-        // ctx.lineTo(w, h);
-        // ctx.strokeStyle = "red";
-        // ctx.stroke();
-
-        // ctx.fillStyle = "green";
-        // ctx.fillRect(w, h, -10, -10);
-        // ctx.fillRect(0, 0, 10, 10);
-        // Draw axes
-
         // Draw the signal
         let start = 0;
         let end = zoom;
@@ -70,10 +54,10 @@ function SignalGraph({ endpoint, start_time, end_time, data }) {
         if (data["flags"]["has_gps_fix"]) {
           ctx.strokeStyle = "#0f0";
         } else {
-          ctx.strokeStyle = "#f0f";
+          ctx.strokeStyle = "#ffc145";
         }
 
-        if (data["flags"]["clipping"]) {
+        if (data["flags"]["is_clipping"]) {
           ctx.strokeStyle = "#f00";
         }
 
@@ -121,7 +105,6 @@ function SignalGraph({ endpoint, start_time, end_time, data }) {
 
     return () => {
       let ctx = canvas.getContext("2d");
-      canvas.removeEventListener("wheel", onwheel);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
   }, [data, canvasSize, zoom]);
