@@ -10,8 +10,12 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::sync::Arc;
+use tokio::signal;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
+use tower_http::timeout::TimeoutLayer;
+use tower_http::trace::TraceLayer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataPointFlags {
@@ -53,11 +57,32 @@ struct TimeDataResponse {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+enum NodeStatus {
+    #[serde(rename = "online")]
+    Online,
+
+    #[serde(rename = "timeout")]
+    Timeout,
+
+    #[serde(rename = "nogpsfix")]
+    NoGpsFix,
+
+    #[serde(rename = "offline")]
+    Offline,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 struct NodeEntry {
     node_id: String,
+    status: NodeStatus,
     location: String,
     last_update: i64,
     data: Option<DataPoint>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Params {
+    node: String,
 }
 
 struct AppState {
@@ -77,6 +102,7 @@ async fn all_data_handler(
                     node_id: node_id.clone(),
                     location: "Unknown".to_string(),
                     last_update: data.timestamp.unwrap_or(0),
+                    status: NodeStatus::Online,
                     data: Some(data.clone()),
                 });
             }
@@ -85,6 +111,7 @@ async fn all_data_handler(
                     node_id: node_id.clone(),
                     location: "Unknown".to_string(),
                     last_update: 0,
+                    status: NodeStatus::Offline,
                     data: None,
                 });
             }
@@ -111,6 +138,7 @@ async fn node_handler(
             return Ok(Json(NodeEntry {
                 node_id: node_id,
                 location: "Earth".to_string(),
+                status: NodeStatus::Online,
                 last_update: data.timestamp.unwrap_or(0),
                 data: Some(data.clone()),
             }));
@@ -124,6 +152,8 @@ async fn node_handler(
 async fn main() -> Result<()> {
     // Initialize logger
     simple_logger::init_with_level(log::Level::Info).unwrap();
+
+    log::info!("Starting ET Live Data Server");
 
     // Load config file
     let node_file_contents = fs::read_to_string("config.toml")?;
@@ -153,14 +183,24 @@ async fn main() -> Result<()> {
         .route("/api/data/all", get(all_data_handler))
         .route("/api/data/:node", get(node_handler))
         .with_state(app_state)
-        .layer(tower_http::cors::CorsLayer::permissive());
+        // .layer(tower_http::cors::CorsLayer::permissive())
+        .layer((
+            TraceLayer::new_for_http(),
+            // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
+            // requests don't hang forever.
+            TimeoutLayer::new(std::time::Duration::from_secs(10)),
+        ));
 
     // Create axum listener
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+
     // Clone for collection task
     let data_cache_clone = data_cache.clone();
-    tokio::spawn(async move {
+    let cancellation_token_clone = cancellation_token.clone();
+    let handle = tokio::spawn(async move {
+        let cancellation_token = cancellation_token_clone;
         let nodes = config.nodes;
         let mut semaphores = HashMap::<String, Arc<tokio::sync::Semaphore>>::new();
         for node in nodes.iter() {
@@ -173,6 +213,10 @@ async fn main() -> Result<()> {
         let data_cache = data_cache_clone;
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
         loop {
+            if cancellation_token.is_cancelled() {
+                log::info!("Collection task cancelled");
+                break;
+            }
             for node in nodes.iter() {
                 let semaphore = semaphores.get(&node.node_id).unwrap();
                 let data_cache = data_cache.clone();
@@ -192,10 +236,22 @@ async fn main() -> Result<()> {
                                 Ok(response) => {
                                     if response.status() == 200 {
                                         log::debug!("Got response from {}", node.node_id);
-                                        let json =
-                                            response.json::<LastDataResponse>().await.unwrap();
-                                        let mut data_cache = data_cache.write().await;
-                                        data_cache.insert(node.node_id.clone(), Some(json.data));
+                                        match response.json::<LastDataResponse>().await {
+                                            Ok(json) => {
+                                                let mut data_cache = data_cache.write().await;
+                                                data_cache
+                                                    .insert(node.node_id.clone(), Some(json.data));
+                                            }
+                                            Err(e) => {
+                                                let mut data_cache = data_cache.write().await;
+                                                data_cache.insert(node.node_id.clone(), None);
+                                                log::error!(
+                                                    "Failed to parse response from {}: {}",
+                                                    node.node_id,
+                                                    e
+                                                );
+                                            }
+                                        }
                                     } else {
                                         let mut data_cache = data_cache.write().await;
                                         data_cache.insert(node.node_id.clone(), None);
@@ -204,6 +260,11 @@ async fn main() -> Result<()> {
                                 Err(e) => {
                                     let mut data_cache = data_cache.write().await;
                                     data_cache.insert(node.node_id.clone(), None);
+                                    log::debug!(
+                                        "Failed to get response from {}: {}",
+                                        node.node_id,
+                                        e
+                                    );
                                 }
                             }
                         });
@@ -218,12 +279,48 @@ async fn main() -> Result<()> {
     });
 
     // Serve the app
-    axum::serve(listener, router).await.unwrap();
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown_signal(cancellation_token.clone()))
+        .await
+        .unwrap();
+
+    // Wait for collection task to finish
+    tokio::select! {
+        _ = handle => {},
+        _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+            log::error!("Collection task did not finish in time");
+        }
+    };
+
+    log::info!("Server is shutting down");
 
     Ok(())
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Params {
-    node: String,
+async fn shutdown_signal(token: CancellationToken) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    log::info!("Received shutdown signal");
+
+    token.cancel();
 }
