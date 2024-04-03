@@ -80,6 +80,10 @@ struct NodeEntry {
     data: Option<DataPoint>,
 }
 
+struct NodeInfo {
+    location: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct Params {
     node: String,
@@ -87,12 +91,14 @@ struct Params {
 
 struct AppState {
     data_cache: Arc<RwLock<BTreeMap<String, Option<DataPoint>>>>,
+    node_infos: Arc<BTreeMap<String, NodeInfo>>,
 }
 
 async fn all_data_handler(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Json<TimeDataResponse>, StatusCode> {
     let data_cache = app_state.data_cache.read().await;
+    let node_infos = app_state.node_infos.clone();
 
     let mut nodes = Vec::new();
     for (node_id, data) in data_cache.iter() {
@@ -100,7 +106,7 @@ async fn all_data_handler(
             Some(data) => {
                 nodes.push(NodeEntry {
                     node_id: node_id.clone(),
-                    location: "Unknown".to_string(),
+                    location: node_infos.get(node_id).unwrap().location.clone(),
                     last_update: data.timestamp.unwrap_or(0),
                     status: NodeStatus::Online,
                     data: Some(data.clone()),
@@ -109,7 +115,7 @@ async fn all_data_handler(
             None => {
                 nodes.push(NodeEntry {
                     node_id: node_id.clone(),
-                    location: "Unknown".to_string(),
+                    location: node_infos.get(node_id).unwrap().location.clone(),
                     last_update: 0,
                     status: NodeStatus::Offline,
                     data: None,
@@ -130,14 +136,15 @@ async fn node_handler(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Json<NodeEntry>, StatusCode> {
     let data_cache = app_state.data_cache.read().await;
+    let node_infos = app_state.node_infos.clone();
 
     let mut node_id = params.node.clone();
     node_id.make_ascii_uppercase();
     if let Some(data) = data_cache.get(&node_id) {
         if let Some(data) = data {
             return Ok(Json(NodeEntry {
-                node_id: node_id,
-                location: "Earth".to_string(),
+                node_id: node_id.clone(),
+                location: node_infos.get(&node_id.clone()).unwrap().location.clone(),
                 status: NodeStatus::Online,
                 last_update: data.timestamp.unwrap_or(0),
                 data: Some(data.clone()),
@@ -161,18 +168,29 @@ async fn main() -> Result<()> {
 
     // Create ET data cache
     let mut data_cache = BTreeMap::<String, Option<DataPoint>>::new();
+    let mut node_infos = BTreeMap::<String, NodeInfo>::new();
 
     // initialize cache with None
     for node in config.nodes.iter() {
         data_cache.insert(node.node_id.clone(), None);
+        node_infos.insert(
+            node.node_id.clone(),
+            NodeInfo {
+                location: node.location.clone(),
+            },
+        );
     }
+
+    let node_infos = node_infos;
 
     // Move to multi-thread/access capable storage
     let data_cache = std::sync::Arc::new(tokio::sync::RwLock::new(data_cache));
+    let node_infos = std::sync::Arc::new(node_infos);
 
     // Create app state
     let app_state = AppState {
         data_cache: data_cache.clone(),
+        node_infos: node_infos.clone(),
     };
 
     let app_state = Arc::new(app_state);
@@ -183,7 +201,7 @@ async fn main() -> Result<()> {
         .route("/api/data/all", get(all_data_handler))
         .route("/api/data/:node", get(node_handler))
         .with_state(app_state)
-        // .layer(tower_http::cors::CorsLayer::permissive())
+        .layer(tower_http::cors::CorsLayer::permissive())
         .layer((
             TraceLayer::new_for_http(),
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
@@ -212,69 +230,56 @@ async fn main() -> Result<()> {
 
         let data_cache = data_cache_clone;
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
-        loop {
-            if cancellation_token.is_cancelled() {
-                log::info!("Collection task cancelled");
-                break;
-            }
-            for node in nodes.iter() {
-                let semaphore = semaphores.get(&node.node_id).unwrap();
-                let data_cache = data_cache.clone();
-                let node = node.clone();
-                match semaphore.try_acquire() {
-                    Ok(_) => {
-                        let semaphore = semaphore.clone();
-                        tokio::spawn(async move {
-                            let _permit = semaphore.clone().acquire_owned().await.unwrap();
-                            let client = Client::new();
-                            let response = client
-                                .get(node.data_endpoint.clone())
-                                .timeout(std::time::Duration::from_millis(800))
-                                .send()
-                                .await;
-                            match response {
-                                Ok(response) => {
-                                    if response.status() == 200 {
-                                        log::debug!("Got response from {}", node.node_id);
-                                        match response.json::<LastDataResponse>().await {
-                                            Ok(json) => {
-                                                let mut data_cache = data_cache.write().await;
-                                                data_cache
-                                                    .insert(node.node_id.clone(), Some(json.data));
-                                            }
-                                            Err(e) => {
-                                                let mut data_cache = data_cache.write().await;
-                                                data_cache.insert(node.node_id.clone(), None);
-                                                log::error!(
-                                                    "Failed to parse response from {}: {}",
-                                                    node.node_id,
-                                                    e
-                                                );
-                                            }
-                                        }
-                                    } else {
+        for node in nodes.iter() {
+            let data_cache = data_cache.clone();
+            let node = node.clone();
+            let cancellation_token = cancellation_token.clone();
+            tokio::spawn(async move {
+                loop {
+                    if cancellation_token.is_cancelled() {
+                        log::info!("Collection task cancelled");
+                        break;
+                    }
+
+                    let client = Client::new();
+                    let response = client
+                        .get(node.data_endpoint.clone())
+                        .timeout(std::time::Duration::from_millis(10000))
+                        .send()
+                        .await;
+
+                    match response {
+                        Ok(response) => {
+                            if response.status() == 200 {
+                                log::debug!("Got response from {}", node.node_id);
+                                match response.json::<LastDataResponse>().await {
+                                    Ok(json) => {
+                                        let mut data_cache = data_cache.write().await;
+                                        data_cache.insert(node.node_id.clone(), Some(json.data));
+                                    }
+                                    Err(e) => {
                                         let mut data_cache = data_cache.write().await;
                                         data_cache.insert(node.node_id.clone(), None);
+                                        log::error!(
+                                            "Failed to parse response from {}: {}",
+                                            node.node_id,
+                                            e
+                                        );
                                     }
                                 }
-                                Err(e) => {
-                                    let mut data_cache = data_cache.write().await;
-                                    data_cache.insert(node.node_id.clone(), None);
-                                    log::debug!(
-                                        "Failed to get response from {}: {}",
-                                        node.node_id,
-                                        e
-                                    );
-                                }
+                            } else {
+                                let mut data_cache = data_cache.write().await;
+                                data_cache.insert(node.node_id.clone(), None);
                             }
-                        });
+                        }
+                        Err(e) => {
+                            let mut data_cache = data_cache.write().await;
+                            data_cache.insert(node.node_id.clone(), None);
+                            log::debug!("Failed to get response from {}: {}", node.node_id, e);
+                        }
                     }
-                    Err(_) => {}
                 }
-            }
-
-            // Wait for a bit before pinging again
-            interval.tick().await;
+            });
         }
     });
 

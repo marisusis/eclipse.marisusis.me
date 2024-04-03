@@ -21,15 +21,19 @@ function App() {
 
   useEffect(() => {
     let timeout = null;
+    let fetching = false;
     let interval = setInterval(() => {
+      if (fetching) return;
+      fetching = true;
       let controller = new AbortController();
       const signal = controller.signal;
 
       timeout = setTimeout(() => {
         controller.abort();
-      }, 500);
+        fetching = false;
+      }, 5000);
 
-      fetch("/api/data/all", { signal: signal })
+      fetch("http://localhost:8080/api/data/all", { signal: signal })
         .then((response) => {
           if (!response.ok) {
             return Promise.reject(response);
@@ -42,6 +46,9 @@ function App() {
         })
         .catch((error) => {
           console.error("Error fetching data:", error);
+        })
+        .finally(() => {
+          fetching = false;
         });
     }, 1500);
 

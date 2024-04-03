@@ -1,11 +1,11 @@
 FROM node:21-alpine as build_node
 
 WORKDIR /site
-COPY . .
+COPY ./app ./app
 WORKDIR /site/app
 RUN corepack enable pnpm
 RUN pnpm install -d
-
+RUN pnpm run build
 
 FROM rust:latest as build_rust
 
