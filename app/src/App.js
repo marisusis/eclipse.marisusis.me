@@ -33,7 +33,7 @@ function App() {
         fetching = false;
       }, 5000);
 
-      fetch("http://localhost:8080/api/data/all", { signal: signal })
+      fetch("/api/data/all", { signal: signal })
         .then((response) => {
           if (!response.ok) {
             return Promise.reject(response);
