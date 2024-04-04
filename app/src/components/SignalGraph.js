@@ -141,7 +141,7 @@ function SignalGraph({ endpoint, start_time, end_time, data }) {
         <p>Capture interval (ms)</p>
       </div>
       <div className="signal-axis signal-axis-y">
-        <p>Normalized voltage</p>
+        <p>Normalized ADC output</p>
       </div>
       <canvas ref={canvasRef} className="signal-canvas" />
       {data == null ? (
